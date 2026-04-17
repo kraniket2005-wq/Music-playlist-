@@ -1,0 +1,377 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+
+// Structure for a Song node
+typedef struct Song {
+    int id;
+    char title[100];
+    char artist[50];
+    int duration; // duration in seconds
+    struct Song* next;
+} Song;
+
+// Structure for Queue
+typedef struct PlaylistQueue {
+    Song* front;
+    Song* rear;
+    int count;
+} PlaylistQueue;
+
+// Function prototypes
+PlaylistQueue* createPlaylist();
+Song* createSong(int id, char title[], char artist[], int duration);
+void addSongToPlaylist(PlaylistQueue* playlist, int id, char title[], char artist[], int duration);
+Song* removeSongFromPlaylist(PlaylistQueue* playlist);
+void displayPlaylist(PlaylistQueue* playlist);
+void playCurrentSong(PlaylistQueue* playlist);
+void skipToNextSong(PlaylistQueue* playlist);
+void searchSong(PlaylistQueue* playlist, char title[]);
+int getPlaylistLength(PlaylistQueue* playlist);
+bool isPlaylistEmpty(PlaylistQueue* playlist);
+void displaySongInfo(Song* song);
+void freePlaylist(PlaylistQueue* playlist);
+void savePlaylistToFile(PlaylistQueue* playlist, char filename[]);
+void loadPlaylistFromFile(PlaylistQueue* playlist, char filename[]);
+
+// Main function
+int main() {
+    PlaylistQueue* myPlaylist = createPlaylist();
+    int choice, id, duration;
+    char title[100], artist[50], filename[100];
+    
+    printf("\n========================================\n");
+    printf("    MUSIC PLAYLIST MANAGER SYSTEM");
+    printf("\n========================================\n");
+    
+    do {
+        printf("\n===== MENU =====\n");
+        printf("1. Add Song to Playlist\n");
+        printf("2. Remove Current Song\n");
+        printf("3. Display All Songs\n");
+        printf("4. Play Current Song\n");
+        printf("5. Skip to Next Song\n");
+        printf("6. Search Song by Title\n");
+        printf("7. Get Total Songs in Playlist\n");
+        printf("8. Save Playlist to File\n");
+        printf("9. Load Playlist from File\n");
+        printf("0. Exit\n");
+        printf("Enter your choice: ");
+        scanf("%d", &choice);
+        getchar(); // clear input buffer
+        
+        switch(choice) {
+            case 1:
+                printf("\n--- Add New Song ---\n");
+                printf("Enter Song ID: ");
+                scanf("%d", &id);
+                getchar();
+                printf("Enter Song Title: ");
+                fgets(title, sizeof(title), stdin);
+                title[strcspn(title, "\n")] = '\0'; // remove newline
+                printf("Enter Artist Name: ");
+                fgets(artist, sizeof(artist), stdin);
+                artist[strcspn(artist, "\n")] = '\0';
+                printf("Enter Duration (seconds): ");
+                scanf("%d", &duration);
+                addSongToPlaylist(myPlaylist, id, title, artist, duration);
+                break;
+                
+            case 2:
+                printf("\n--- Remove Current Song ---\n");
+                Song* removed = removeSongFromPlaylist(myPlaylist);
+                if(removed != NULL) {
+                    printf("Removed Song: ");
+                    displaySongInfo(removed);
+                    free(removed);
+                }
+                break;
+                
+            case 3:
+                printf("\n--- Current Playlist ---\n");
+                displayPlaylist(myPlaylist);
+                break;
+                
+            case 4:
+                printf("\n--- Now Playing ---\n");
+                playCurrentSong(myPlaylist);
+                break;
+                
+            case 5:
+                printf("\n--- Skip to Next ---\n");
+                skipToNextSong(myPlaylist);
+                break;
+                
+            case 6:
+                printf("\n--- Search Song ---\n");
+                printf("Enter Song Title to search: ");
+                fgets(title, sizeof(title), stdin);
+                title[strcspn(title, "\n")] = '\0';
+                searchSong(myPlaylist, title);
+                break;
+                
+            case 7:
+                printf("\n--- Playlist Statistics ---\n");
+                printf("Total songs in playlist: %d\n", getPlaylistLength(myPlaylist));
+                break;
+                
+            case 8:
+                printf("\n--- Save Playlist ---\n");
+                printf("Enter filename to save: ");
+                fgets(filename, sizeof(filename), stdin);
+                filename[strcspn(filename, "\n")] = '\0';
+                savePlaylistToFile(myPlaylist, filename);
+                break;
+                
+            case 9:
+                printf("\n--- Load Playlist ---\n");
+                printf("Enter filename to load: ");
+                fgets(filename, sizeof(filename), stdin);
+                filename[strcspn(filename, "\n")] = '\0';
+                loadPlaylistFromFile(myPlaylist, filename);
+                break;
+                
+            case 0:
+                printf("\nThank you for using Music Playlist Manager!\n");
+                break;
+                
+            default:
+                printf("\nInvalid choice! Please try again.\n");
+        }
+    } while(choice != 0);
+    
+    freePlaylist(myPlaylist);
+    return 0;
+}
+
+// Create a new playlist (queue)
+PlaylistQueue* createPlaylist() {
+    PlaylistQueue* playlist = (PlaylistQueue*)malloc(sizeof(PlaylistQueue));
+    if(playlist == NULL) {
+        printf("Memory allocation failed!\n");
+        return NULL;
+    }
+    playlist->front = NULL;
+    playlist->rear = NULL;
+    playlist->count = 0;
+    return playlist;
+}
+
+// Create a new song node
+Song* createSong(int id, char title[], char artist[], int duration) {
+    Song* newSong = (Song*)malloc(sizeof(Song));
+    if(newSong == NULL) {
+        printf("Memory allocation failed!\n");
+        return NULL;
+    }
+    newSong->id = id;
+    strcpy(newSong->title, title);
+    strcpy(newSong->artist, artist);
+    newSong->duration = duration;
+    newSong->next = NULL;
+    return newSong;
+}
+
+// Add song to the playlist (enqueue)
+void addSongToPlaylist(PlaylistQueue* playlist, int id, char title[], char artist[], int duration) {
+    Song* newSong = createSong(id, title, artist, duration);
+    if(newSong == NULL) return;
+    
+    if(playlist->rear == NULL) {
+        // Playlist is empty
+        playlist->front = newSong;
+        playlist->rear = newSong;
+    } else {
+        // Add at the end
+        playlist->rear->next = newSong;
+        playlist->rear = newSong;
+    }
+    playlist->count++;
+    printf("✓ Song '%s' by %s added to playlist!\n", title, artist);
+}
+
+// Remove current playing song from playlist (dequeue)
+Song* removeSongFromPlaylist(PlaylistQueue* playlist) {
+    if(isPlaylistEmpty(playlist)) {
+        printf("Playlist is empty! Cannot remove song.\n");
+        return NULL;
+    }
+    
+    Song* removedSong = playlist->front;
+    playlist->front = playlist->front->next;
+    
+    if(playlist->front == NULL) {
+        playlist->rear = NULL;
+    }
+    
+    playlist->count--;
+    return removedSong;
+}
+
+// Display all songs in the playlist
+void displayPlaylist(PlaylistQueue* playlist) {
+    if(isPlaylistEmpty(playlist)) {
+        printf("Playlist is empty!\n");
+        return;
+    }
+    
+    Song* current = playlist->front;
+    int position = 1;
+    
+    printf("\n========================================\n");
+    printf("%-4s %-4s %-25s %-20s %-10s\n", "Pos", "ID", "Title", "Artist", "Duration");
+    printf("========================================\n");
+    
+    while(current != NULL) {
+        int minutes = current->duration / 60;
+        int seconds = current->duration % 60;
+        printf("%-4d %-4d %-25s %-20s %02d:%02d\n", 
+               position++, current->id, current->title, 
+               current->artist, minutes, seconds);
+        current = current->next;
+    }
+    printf("========================================\n");
+    printf("Total songs: %d\n", playlist->count);
+}
+
+// Play the current song (front of queue)
+void playCurrentSong(PlaylistQueue* playlist) {
+    if(isPlaylistEmpty(playlist)) {
+        printf("No songs in playlist to play!\n");
+        return;
+    }
+    
+    printf("🎵 Now Playing: ");
+    displaySongInfo(playlist->front);
+}
+
+// Skip to next song (remove current, play next)
+void skipToNextSong(PlaylistQueue* playlist) {
+    if(isPlaylistEmpty(playlist)) {
+        printf("No songs to skip!\n");
+        return;
+    }
+    
+    Song* currentSong = removeSongFromPlaylist(playlist);
+    if(currentSong != NULL) {
+        printf("Skipping: ");
+        displaySongInfo(currentSong);
+        free(currentSong);
+    }
+    
+    if(!isPlaylistEmpty(playlist)) {
+        printf("⏭️  Now playing next song: ");
+        displaySongInfo(playlist->front);
+    } else {
+        printf("Playlist is now empty!\n");
+    }
+}
+
+// Search for a song by title
+void searchSong(PlaylistQueue* playlist, char title[]) {
+    if(isPlaylistEmpty(playlist)) {
+        printf("Playlist is empty!\n");
+        return;
+    }
+    
+    Song* current = playlist->front;
+    bool found = false;
+    int position = 1;
+    
+    while(current != NULL) {
+        if(strcasecmp(current->title, title) == 0) {
+            printf("\n✓ Song found at position %d:\n", position);
+            printf("  ID: %d\n", current->id);
+            printf("  Title: %s\n", current->title);
+            printf("  Artist: %s\n", current->artist);
+            int minutes = current->duration / 60;
+            int seconds = current->duration % 60;
+            printf("  Duration: %02d:%02d\n", minutes, seconds);
+            found = true;
+        }
+        current = current->next;
+        position++;
+    }
+    
+    if(!found) {
+        printf("Song '%s' not found in playlist!\n", title);
+    }
+}
+
+// Get total number of songs in playlist
+int getPlaylistLength(PlaylistQueue* playlist) {
+    return playlist->count;
+}
+
+// Check if playlist is empty
+bool isPlaylistEmpty(PlaylistQueue* playlist) {
+    return (playlist->front == NULL);
+}
+
+// Display song information
+void displaySongInfo(Song* song) {
+    if(song == NULL) return;
+    int minutes = song->duration / 60;
+    int seconds = song->duration % 60;
+    printf("ID: %d | %s - %s [%02d:%02d]\n", 
+           song->id, song->title, song->artist, minutes, seconds);
+}
+
+// Free all allocated memory
+void freePlaylist(PlaylistQueue* playlist) {
+    while(!isPlaylistEmpty(playlist)) {
+        Song* temp = removeSongFromPlaylist(playlist);
+        free(temp);
+    }
+    free(playlist);
+}
+
+// Save playlist to file
+void savePlaylistToFile(PlaylistQueue* playlist, char filename[]) {
+    if(isPlaylistEmpty(playlist)) {
+        printf("Playlist is empty! Nothing to save.\n");
+        return;
+    }
+    
+    FILE* file = fopen(filename, "w");
+    if(file == NULL) {
+        printf("Error creating file!\n");
+        return;
+    }
+    
+    Song* current = playlist->front;
+    while(current != NULL) {
+        fprintf(file, "%d|%s|%s|%d\n", current->id, current->title, 
+                current->artist, current->duration);
+        current = current->next;
+    }
+    
+    fclose(file);
+    printf("✓ Playlist saved successfully to '%s'\n", filename);
+}
+
+// Load playlist from file
+void loadPlaylistFromFile(PlaylistQueue* playlist, char filename[]) {
+    FILE* file = fopen(filename, "r");
+    if(file == NULL) {
+        printf("File not found!\n");
+        return;
+    }
+    
+    // Clear existing playlist
+    while(!isPlaylistEmpty(playlist)) {
+        Song* temp = removeSongFromPlaylist(playlist);
+        free(temp);
+    }
+    
+    int id, duration;
+    char title[100], artist[50];
+    
+    while(fscanf(file, "%d|%[^|]|%[^|]|%d\n", &id, title, artist, &duration) == 4) {
+        addSongToPlaylist(playlist, id, title, artist, duration);
+    }
+    
+    fclose(file);
+    printf("✓ Playlist loaded successfully from '%s'\n", filename);
+}
